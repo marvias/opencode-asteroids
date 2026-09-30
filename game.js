@@ -28,6 +28,10 @@ const wrap  = (v, max) => ((v % max) + max) % max;
 const dist  = (a, b)   => Math.hypot(a.x - b.x, a.y - b.y);
 const rand  = (min, max) => min + Math.random() * (max - min);
 const randInt = (min, max) => Math.floor(rand(min, max + 1));
+const hexToRgb = hex => {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+};
 
 // ── Bullet ────────────────────────────────────────────────────────────────────
 class Bullet {
@@ -196,7 +200,15 @@ class Ship {
     this.invincible    = 3;
     this.shootCooldown = 0;
     this.speedBoostTtl = 0;
+    this.tripleShotTtl = 0;
     this.dead          = false;
+  }
+
+  // Color del power-up activo, o null si no hay ninguno
+  activeColor() {
+    if (this.speedBoostTtl > 0) return SPEED_POWERUP_COLOR;
+    if (this.tripleShotTtl > 0) return TRIPLE_SHOT_COLOR;
+    return null;
   }
 
   update(dt) {
@@ -221,6 +233,7 @@ class Ship {
     this.vx *= DRAG;
     this.vy *= DRAG;
     if (this.speedBoostTtl > 0) this.speedBoostTtl -= dt;
+    if (this.tripleShotTtl > 0) this.tripleShotTtl -= dt;
     this.x = wrap(this.x + this.vx * dt, W);
     this.y = wrap(this.y + this.vy * dt, H);
   }
@@ -231,7 +244,11 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
-    return [new Bullet(ox, oy, this.angle)];
+
+    if (this.tripleShotTtl <= 0) return [new Bullet(ox, oy, this.angle)];
+
+    // Abanico: bala al centro + 2 laterales a ±TRIPLE_SHOT_SPREAD
+    return [0, -1, 1].map(dir => new Bullet(ox, oy, this.angle + dir * TRIPLE_SHOT_SPREAD));
   }
 
   draw() {
@@ -242,8 +259,8 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    const boosted = this.speedBoostTtl > 0;
-    ctx.strokeStyle = boosted ? POWERUP_COLOR : '#fff';
+    const activeColor = this.activeColor();
+    ctx.strokeStyle = activeColor || '#fff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
@@ -262,7 +279,9 @@ class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8,  4);
-      ctx.strokeStyle = boosted ? 'rgba(77,215,255,0.9)' : 'rgba(255, 130, 0, 0.85)';
+      ctx.strokeStyle = activeColor
+        ? `rgba(${hexToRgb(activeColor)},0.9)`
+        : 'rgba(255, 130, 0, 0.85)';
       ctx.stroke();
     }
 
@@ -303,12 +322,17 @@ class Particle {
   }
 }
 
-// ── Power up "Velocidad" ───────────────────────────────────────────────────────
-const POWERUP_CHANCE       = 0.08; // drop chance when an asteroid is destroyed
-const POWERUP_COLOR        = '#4dd7ff';
-const POWERUP_TTL          = 8;    // seconds before despawning if not picked up
+// ── Power ups ─────────────────────────────────────────────────────────────────
+const POWERUP_CHANCE = 0.08; // drop chance when an asteroid is destroyed
+const POWERUP_TTL    = 8;    // seconds before despawning if not picked up
+
 const SPEED_BOOST_DURATION = 5;    // seconds of double speed
 const SPEED_MULTIPLIER     = 2;
+const SPEED_POWERUP_COLOR  = '#4dd7ff';
+
+const TRIPLE_SHOT_DURATION = 5;    // seconds of triple shot
+const TRIPLE_SHOT_SPREAD   = 0.2;  // rad (~11°) de apertura del abanico
+const TRIPLE_SHOT_COLOR    = '#ff5ec4';
 
 class PowerUp {
   constructor(x, y) {
@@ -320,6 +344,8 @@ class PowerUp {
     this.dead   = false;
   }
 
+  get rgb() { return hexToRgb(this.color); }
+
   update(dt) {
     this.pulse += dt * 3;
     this.ttl   -= dt;
@@ -327,25 +353,45 @@ class PowerUp {
   }
 
   draw() {
-    // Blink when about to expire
+    // Parpadeo antes de expirar
     if (this.ttl < 2 && Math.floor(this.ttl * 8) % 2 === 0) return;
 
     const r = this.radius + Math.sin(this.pulse) * 2;
     ctx.save();
     ctx.translate(this.x, this.y);
 
-    // Outer halo
-    ctx.strokeStyle = 'rgba(77,215,255,0.35)';
+    // Halo exterior
+    ctx.strokeStyle = `rgba(${this.rgb},0.35)`;
     ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Icon: double chevron pointing right
-    ctx.strokeStyle = POWERUP_COLOR;
+    ctx.strokeStyle = this.color;
     ctx.lineWidth = 2.5;
-    ctx.lineJoin  = 'round';
-    ctx.lineCap   = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    this.drawIcon();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  drawIcon() {}
+  applyTo() {}
+}
+
+class SpeedPowerUp extends PowerUp {
+  constructor(x, y) {
+    super(x, y);
+    this.color    = SPEED_POWERUP_COLOR;
+    this.duration = SPEED_BOOST_DURATION;
+  }
+
+  applyTo(ship) { ship.speedBoostTtl = this.duration; }
+
+  // Icono: doble chevron hacia la derecha
+  drawIcon() {
     ctx.beginPath();
     ctx.moveTo(-5, -6);
     ctx.lineTo( 1,  0);
@@ -353,9 +399,27 @@ class PowerUp {
     ctx.moveTo( 1, -6);
     ctx.lineTo( 7,  0);
     ctx.lineTo( 1,  6);
-    ctx.stroke();
+  }
+}
 
-    ctx.restore();
+class TripleShotPowerUp extends PowerUp {
+  constructor(x, y) {
+    super(x, y);
+    this.color    = TRIPLE_SHOT_COLOR;
+    this.duration = TRIPLE_SHOT_DURATION;
+  }
+
+  applyTo(ship) { ship.tripleShotTtl = this.duration; }
+
+  // Icono: abanico de 3 rayos con la misma apertura del disparo real
+  drawIcon() {
+    const ORIGIN_Y = 6;
+    const LEN = 11;
+    for (const dir of [-1, 0, 1]) {
+      const a = -Math.PI / 2 + dir * TRIPLE_SHOT_SPREAD;
+      ctx.moveTo(0, ORIGIN_Y);
+      ctx.lineTo(Math.cos(a) * LEN, ORIGIN_Y + Math.sin(a) * LEN);
+    }
   }
 }
 
@@ -427,8 +491,12 @@ function explode(x, y, count = 8, color) {
   for (let i = 0; i < count; i++) particles.push(new Particle(x, y, color));
 }
 
+const POWERUP_TYPES = [SpeedPowerUp, TripleShotPowerUp];
+
 function maybeSpawnPowerUp(x, y) {
-  if (Math.random() < POWERUP_CHANCE) powerUps.push(new PowerUp(x, y));
+  if (Math.random() >= POWERUP_CHANCE) return;
+  const Type = POWERUP_TYPES[randInt(0, POWERUP_TYPES.length - 1)];
+  powerUps.push(new Type(x, y));
 }
 
 function killShip() {
@@ -520,8 +588,8 @@ function update(dt) {
   for (const pu of powerUps) {
     if (!pu.dead && dist(ship, pu) < ship.radius + pu.radius) {
       pu.dead = true;
-      ship.speedBoostTtl = SPEED_BOOST_DURATION;
-      explode(ship.x, ship.y, 10, '77,215,255');
+      pu.applyTo(ship);
+      explode(ship.x, ship.y, 10, pu.rgb);
     }
   }
   powerUps = powerUps.filter(p => !p.dead);
@@ -548,6 +616,29 @@ function drawLifeIcon(x, y) {
   ctx.restore();
 }
 
+// Power-ups activos, en el orden en que se apilan en el HUD
+const ACTIVE_BOOSTS = [
+  { get ttl() { return ship.speedBoostTtl; }, duration: SPEED_BOOST_DURATION, color: SPEED_POWERUP_COLOR,  label: 'VELOCIDAD' },
+  { get ttl() { return ship.tripleShotTtl; }, duration: TRIPLE_SHOT_DURATION, color: TRIPLE_SHOT_COLOR,    label: 'TRIPLE' },
+];
+
+function drawBoostIndicator(boost, row) {
+  const { ttl, duration, color, label } = boost;
+  if (ttl <= 0) return;
+
+  const barW = 60;
+  const y = 45 + row * 18;
+
+  ctx.fillStyle = color;
+  ctx.font      = '12px monospace';
+  ctx.fillText(`${label} ${ttl.toFixed(1)}s`, W / 2, y);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(W / 2 - barW / 2, y + 7, barW, 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(W / 2 - barW / 2, y + 7, barW * (ttl / duration), 4);
+}
+
 function drawHUD() {
   ctx.fillStyle = '#fff';
   ctx.font = '15px monospace';
@@ -561,20 +652,7 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
-  // Speed power-up indicator
-  if (ship.speedBoostTtl > 0) {
-    const barW = 60;
-    const frac = ship.speedBoostTtl / SPEED_BOOST_DURATION;
-
-    ctx.fillStyle   = POWERUP_COLOR;
-    ctx.font        = '12px monospace';
-    ctx.fillText(`VELOCIDAD ${ship.speedBoostTtl.toFixed(1)}s`, W / 2, 45);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(W / 2 - barW / 2, 52, barW, 4);
-    ctx.fillStyle = POWERUP_COLOR;
-    ctx.fillRect(W / 2 - barW / 2, 52, barW * frac, 4);
-  }
+  ACTIVE_BOOSTS.forEach((boost, row) => drawBoostIndicator(boost, row));
 }
 
 function drawOverlay(title, sub) {
