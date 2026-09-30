@@ -37,6 +37,7 @@ Luego visita `http://localhost:3000`.
 | Grande    | 20     |
 | Mediano   | 50     |
 | Pequeño   | 100    |
+| Estrella fugaz | 150 |
 
 ## Características
 
@@ -44,3 +45,4 @@ Luego visita `http://localhost:3000`.
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
 - Power-up **Velocidad**: al destruir asteroides puede caer un power-up cyan; al recogerlo la nave se mueve al doble de velocidad durante 5 segundos (indicador con barra de tiempo en pantalla)
+- **Estrella fugaz**: asteroide dorado bonus que aparece cada 12 segundos (máximo una activa); se mueve muy rápido (~240 px/s), no se divide, da 150 puntos y desaparece con una pequeña explosión tras ~7 segundos
