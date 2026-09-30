@@ -31,7 +31,7 @@ const randInt = (min, max) => Math.floor(rand(min, max + 1));
 
 // ── Bullet ────────────────────────────────────────────────────────────────────
 class Bullet {
-  constructor(x, y, angle) {
+  constructor(x, y, angle, color = '#fff') {
     this.x = x;
     this.y = y;
     const SPEED = 520;
@@ -39,6 +39,7 @@ class Bullet {
     this.vy = Math.sin(angle) * SPEED;
     this.ttl  = 1.1;
     this.radius = 2;
+    this.color = color;
     this.dead = false;
   }
 
@@ -50,7 +51,7 @@ class Bullet {
   }
 
   draw() {
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -181,6 +182,74 @@ class ShootingStar extends Asteroid {
   }
 }
 
+// ── Skins ─────────────────────────────────────────────────────────────────────
+// Cada silueta son vértices en coordenadas locales: nariz hacia +x, centro en (0,0).
+const SKIN_STORAGE_KEY = 'asteroids.skin';
+
+const SKINS = [
+  {
+    id: 'classic',
+    name: 'CLÁSICA',
+    color: '#ffffff',
+    shape: [[20, 0], [-12, -9], [-7, 0], [-12, 9]],
+  },
+  {
+    id: 'interceptor',
+    name: 'INTERCEPTOR',
+    color: '#a6ff4d',
+    shape: [[22, 0], [-8, -5], [-2, 0], [-8, 5]],
+  },
+  {
+    id: 'freighter',
+    name: 'CARGUERO',
+    color: '#ffb347',
+    shape: [[12, 0], [7, -5], [7, -10], [-14, -10], [-10, 0], [-14, 10], [7, 10], [7, 5]],
+  },
+  {
+    id: 'stealth',
+    name: 'SIGILOSA',
+    color: '#ff5ec4',
+    shape: [[16, 0], [-15, -12], [-4, 0], [-15, 12]],
+  },
+];
+
+let skinIndex = 0;
+
+function getSkin() {
+  return SKINS[skinIndex];
+}
+
+// Extremos de la silueta: punta (ancla del disparo) y cola (ancla de la llama)
+function extremes(shape) {
+  const xs = shape.map(p => p[0]);
+  return { nose: Math.max(...xs), tail: Math.min(...xs) };
+}
+
+// Contorno cerrado de la silueta en el path actual (no dibuja: cada sitio
+// define su propio grosor y color)
+function traceShape(shape) {
+  ctx.beginPath();
+  ctx.moveTo(shape[0][0], shape[0][1]);
+  for (let i = 1; i < shape.length; i++)
+    ctx.lineTo(shape[i][0], shape[i][1]);
+  ctx.closePath();
+}
+
+function cycleSkin() {
+  skinIndex = (skinIndex + 1) % SKINS.length;
+  try {
+    localStorage.setItem(SKIN_STORAGE_KEY, getSkin().id);
+  } catch (e) { /* sin persistencia disponible */ }
+}
+
+function loadSkin() {
+  try {
+    const saved = localStorage.getItem(SKIN_STORAGE_KEY);
+    const index = SKINS.findIndex(s => s.id === saved);
+    if (index !== -1) skinIndex = index;
+  } catch (e) { /* sin persistencia disponible */ }
+}
+
 // ── Ship ──────────────────────────────────────────────────────────────────────
 class Ship {
   constructor() { this.reset(); }
@@ -228,10 +297,10 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-    const NOSE = 21;
-    const ox = this.x + Math.cos(this.angle) * NOSE;
-    const oy = this.y + Math.sin(this.angle) * NOSE;
-    return [new Bullet(ox, oy, this.angle)];
+    const { nose } = extremes(getSkin().shape);
+    const ox = this.x + Math.cos(this.angle) * nose;
+    const oy = this.y + Math.sin(this.angle) * nose;
+    return [new Bullet(ox, oy, this.angle, getSkin().color)];
   }
 
   draw() {
@@ -239,31 +308,29 @@ class Ship {
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
+    const skin = getSkin();
+    const { tail } = extremes(skin.shape);
+    const boosted = this.speedBoostTtl > 0;
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    const boosted = this.speedBoostTtl > 0;
-    ctx.strokeStyle = boosted ? POWERUP_COLOR : '#fff';
+    ctx.strokeStyle = boosted ? POWERUP_COLOR : skin.color;
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
-    // Silueta clásica: triángulo con muesca trasera
-    ctx.beginPath();
-    ctx.moveTo( 20,  0);   // nariz
-    ctx.lineTo(-12, -9);   // ala izquierda
-    ctx.lineTo( -7,  0);   // muesca trasera
-    ctx.lineTo(-12,  9);   // ala derecha
-    ctx.closePath();
+    traceShape(skin.shape);
     ctx.stroke();
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
       ctx.beginPath();
-      ctx.moveTo(-8, -4);
-      ctx.lineTo(-8 - rand(6, 14), 0);
-      ctx.lineTo(-8,  4);
-      ctx.strokeStyle = boosted ? 'rgba(77,215,255,0.9)' : 'rgba(255, 130, 0, 0.85)';
+      ctx.moveTo(tail, -4);
+      ctx.lineTo(tail - rand(6, 14), 0);
+      ctx.lineTo(tail,  4);
+      ctx.globalAlpha = 0.85;
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
@@ -445,6 +512,9 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  // Cambio de skin disponible en cualquier estado
+  if (pressed('KeyS')) cycleSkin();
+
   if (state === 'gameover') {
     if (pressed('Space')) initGame();
     particles.forEach(p => p.update(dt));
@@ -531,19 +601,18 @@ function update(dt) {
 }
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
+const LIFE_ICON_SCALE = 0.45;
+
 function drawLifeIcon(x, y) {
+  const skin = getSkin();
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth   = 1.2;
+  ctx.scale(LIFE_ICON_SCALE, LIFE_ICON_SCALE);
+  ctx.strokeStyle = skin.color;
+  ctx.lineWidth   = 1.2 / LIFE_ICON_SCALE;   // el scale también afecta al grosor
   ctx.lineJoin    = 'round';
-  ctx.beginPath();
-  ctx.moveTo( 9,  0);
-  ctx.lineTo(-6, -5);
-  ctx.lineTo(-3,  0);
-  ctx.lineTo(-6,  5);
-  ctx.closePath();
+  traceShape(skin.shape);
   ctx.stroke();
   ctx.restore();
 }
@@ -561,11 +630,21 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
+  // Skin actual
+  const skin = getSkin();
+  ctx.textAlign = 'left';
+  ctx.font      = '12px monospace';
+  ctx.fillStyle = skin.color;
+  ctx.fillText(`SKIN: ${skin.name}`, 14, 44);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('S: CAMBIAR', 14, 60);
+
   // Speed power-up indicator
   if (ship.speedBoostTtl > 0) {
     const barW = 60;
     const frac = ship.speedBoostTtl / SPEED_BOOST_DURATION;
 
+    ctx.textAlign = 'center';
     ctx.fillStyle   = POWERUP_COLOR;
     ctx.font        = '12px monospace';
     ctx.fillText(`VELOCIDAD ${ship.speedBoostTtl.toFixed(1)}s`, W / 2, 45);
@@ -614,5 +693,6 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
+loadSkin();
 initGame();
 requestAnimationFrame(loop);
