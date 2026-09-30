@@ -45,4 +45,5 @@ Luego visita `http://localhost:3000`.
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
 - Power-up **Velocidad**: al destruir asteroides puede caer un power-up cyan; al recogerlo la nave se mueve al doble de velocidad durante 5 segundos (indicador con barra de tiempo en pantalla)
+- Power-up **Escudo**: al destruir asteroides puede caer un power-up violeta (icono de burbuja); al recogerlo, la nave se rodea de un anillo protector durante 8 segundos (indicador con barra de tiempo en pantalla). Mientras esté activo **ningún asteroide puede matar a la nave**: cada impacto vaporiza el asteroide, suma sus puntos y descuenta 2,5 segundos de escudo (no se parte en fragmentos), así que aguanta unos 3 golpes antes de agotarse
 - **Estrella fugaz**: asteroide dorado bonus que aparece cada 12 segundos (máximo una activa); se mueve muy rápido (~240 px/s), no se divide, da 150 puntos y desaparece con una pequeña explosión tras ~7 segundos
