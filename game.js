@@ -328,7 +328,6 @@ class Ship {
 
     const skin = getSkin();
     const { tail } = extremes(skin.shape);
-    const boosted = this.speedBoostTtl > 0;
 
     ctx.save();
     ctx.translate(this.x, this.y);
@@ -348,7 +347,7 @@ class Ship {
       ctx.lineTo(tail - rand(6, 14), 0);
       ctx.lineTo(tail,  4);
       if (activeColor) {
-        ctx.strokeStyle = `rgba(${activeColor.startsWith('#') ? hexToRgb(activeColor) : POWERUP_RGB},0.9)`;
+        ctx.strokeStyle = `rgba(${hexToRgb(activeColor)},0.9)`;
       } else {
         ctx.strokeStyle = 'rgba(255,130,0,0.85)';
         ctx.globalAlpha = 0.85;
