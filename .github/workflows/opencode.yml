@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: read
-      pull-requests: read
-      issues: read
+     # contents: read
+     # pull-requests: read
+     # issues: read
     steps:
        - name: Checkout repository
          uses: actions/checkout@v6
@@ -29,6 +29,6 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode-zen/Big-Pickle
+          model: opencode-zen/big-pickle
           # share: true
           # github_token: xxxx
