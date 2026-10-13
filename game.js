@@ -217,6 +217,14 @@ const SKINS = [
     color: '#ff5ec4',
     shape: [[16, 0], [-15, -12], [-4, 0], [-15, 12]],
   },
+  {
+    id: 'purple',
+    name: 'MORADA',
+    color: '#b388ff',
+    shape: [[40, 0], [-24, -18], [-14, 0], [-24, 18]],
+    radius: 24,
+    pointsMultiplier: 2,
+  },
 ];
 
 let skinIndex = 0;
@@ -261,12 +269,13 @@ class Ship {
   constructor() { this.reset(); }
 
   reset() {
+    const skin = getSkin();
     this.x      = W / 2;
     this.y      = H / 2;
     this.angle  = -Math.PI / 2;
     this.vx     = 0;
     this.vy     = 0;
-    this.radius = 12;
+    this.radius = skin.radius || 12;
     this.thrusting     = false;
     this.invincible    = 3;
     this.shootCooldown = 0;
@@ -319,16 +328,17 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-    const { nose } = extremes(getSkin().shape);
-    const ox = this.x + Math.cos(this.angle) * nose;
-    const oy = this.y + Math.sin(this.angle) * nose;
-    const bulletColor = getSkin().color;
+  const skin = getSkin();
+  const { nose } = extremes(skin.shape);
+  const ox = this.x + Math.cos(this.angle) * nose;
+  const oy = this.y + Math.sin(this.angle) * nose;
+  const bulletColor = skin.color;
 
-    if (this.tripleShotTtl <= 0) return [new Bullet(ox, oy, this.angle, bulletColor)];
+  if (this.tripleShotTtl <= 0) return [new Bullet(ox, oy, this.angle, bulletColor)];
 
-    // Abanico: bala al centro + 2 laterales a ±TRIPLE_SHOT_SPREAD
-    return [0, -1, 1].map(dir => new Bullet(ox, oy, this.angle + dir * TRIPLE_SHOT_SPREAD, bulletColor));
-  }
+  // Abanico: bala al centro + 2 laterales a ±TRIPLE_SHOT_SPREAD
+  return [0, -1, 1].map(dir => new Bullet(ox, oy, this.angle + dir * TRIPLE_SHOT_SPREAD, bulletColor));
+}
 
   draw() {
     if (this.dead) return;
@@ -626,7 +636,8 @@ function applyPowerUp(pu) {
 function absorbAsteroid(a) {
   a.dead = true;
   ship.shieldTtl = Math.max(0, ship.shieldTtl - SHIELD_HIT_COST);
-  score += a.points;
+  const skin = getSkin();
+  score += a.points * (skin.pointsMultiplier || 1);
   explode(a.x, a.y, a.size * 5, SHIELD_COLOR);
 }
 
@@ -698,7 +709,8 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += a.points;
+        const skin = getSkin();
+        score += a.points * (skin.pointsMultiplier || 1);
         explode(a.x, a.y, a.size * 5);
         maybeSpawnPowerUp(a.x, a.y);
         newAsteroids.push(...a.split());
