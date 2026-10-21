@@ -1,0 +1,73 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Triage issue
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/big-pickle
+          prompt: |
+            Estás haciendo triage automático de un issue recién abierto en este repositorio.
+
+            Reglas estrictas:
+            1. NUNCA modifiques ni borres el texto original del issue (título ni body). Solo puedes agregar contenido al final del body.
+            2. Si el issue ya tiene la label `triaged`, no hagas nada y termina.
+            3. Todo el texto visible que agregues va en español.
+
+            Pasos:
+
+            1. Lee el issue actual (número, título, body, autor, fecha) usando la API de GitHub con el token disponible.
+
+            2. Clasifica el issue: `bug`, `enhancement` (mejora o feature), `question` (consulta) o `documentation`. Justifica en una línea.
+
+            3. Aplica labels vía API de GitHub, creando con POST /repos/{owner}/{repo}/labels las que no existan (colores: bug `d73a4a`, enhancement `a2eeef`, question `d876e3`, documentation `0075ca`, needs-triage `fbca04`, triaged `0e8a16`):
+               - Siempre: `needs-triage` y al terminar `triaged`.
+               - Según la clasificación: solo una de `bug` | `enhancement` | `question` | `documentation`.
+
+            4. Edita el body del issue (PATCH /repos/{owner}/{repo}/issues/{number}) dejando el texto original EXACTO como está y agregando debajo esta sección:
+
+               ---
+
+               ## 📋 Contexto de revisión
+
+               **Clasificación:** <tipo> — <justificación en una línea>
+               **Labels aplicadas:** <lista>
+
+               ### Metadata
+               - Repositorio: <owner/repo> (<URL>)
+               - Issue #<n> abierto por @<autor> el <fecha>
+               - Rama principal: `main`
+               - Stack: HTML5 Canvas + JavaScript ES6+ puro en `game.js`, sin dependencias ni bundler (ver AGENTS.md y README.md)
+               - Cómo reproducir localmente: abrir `index.html` directo o `npx serve .` → http://localhost:3000
+               - Nota: `index.html` y `game.js` duplican el tamaño del canvas (800x600) — relevante si el reporte es de tamaño/redimensionamiento
+
+               ### Campos para revisión
+               Compara lo que vino en el issue original y marca lo que falta:
+               - [x o ] Descripción clara del comportamiento
+               - [x o ] Pasos de reproducción
+               - [x o ] Comportamiento esperado vs. actual
+               - [x o] Navegador y versión
+               - [x o] Sistema operativo
+               - [x o] Área afectada (game.js / index.html / skins / colisiones / power-ups / otro)
+
+               Cuando un campo ya esté en el texto original, márcalo con [x] y cita brevemente el dato encontrado. No inventes información que no esté en el issue.
+
+               Si el issue es un bug de jugabilidad, recuerda al revisor que el repo no tiene tests: la única verificación es probar en el navegador.
